@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>點線遊戲 - 專業掃描版</title>
+    <style>
+        /* --- 基礎設定 --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Arial Rounded MT Bold', sans-serif;
+            background-color: #000;
+            color: white;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* --- 啟動封面 --- */
+        #start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #111;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        #start-btn {
+            padding: 20px 40px;
+            font-size: 30px;
+            background: #00FF00;
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            font-weight: bold;
+            animation: pulseBtn 2s infinite;
+        }
+        @keyframes pulseBtn {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* --- 頂部問題區 --- */
+        #header {
+            height: 25%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #222;
+            border-bottom: 5px solid #555;
+            box-sizing: border-box;
+            font-size: 5vh;
+            padding-top: env(safe-area-inset-top);
+            position: relative;
+        }
+        #question-text { margin-right: 30px; }
+        
+        .sample-display {
+            width: 18vh; 
+            height: 18vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.3s;
+        }
+
+        /* --- 遊戲主區域 --- */
+        #game-area {
+            height: 75%;
+            display: flex;
+            width: 100%;
+            position: relative;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .option-container {
+            width: 50%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            box-sizing: border-box;
+            border: 10px solid #444;
+            cursor: pointer;
+            opacity: 0; 
+            /* visibility 由 JS 控制 */
+            transition: opacity 0.5s ease; /* 統一的淡入淡出時間 */
+        }
+        #left-option { border-right: 5px solid #444; background-color: #111; }
+        #right-option { border-left: 5px solid #444; background-color: #1a1a1a; }
+
+        .shape-svg {
+            width: 70%; 
+            height: 70%;
+            overflow: visible;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.9));
+        }
+
+        /* --- 中央提示 --- */
+        #center-prompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50vh; 
+            height: 50vh;
+            display: none; 
+            z-index: 500;
+            animation: pulsePrompt 2s infinite;
+        }
+        #center-prompt svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 20px rgba(255,255,255,1));
+        }
+
+        @keyframes pulsePrompt {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* 進度條 */
+        .progress-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 80%;
+            border: 10px solid transparent;
+            border-radius: 20px;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        .active-ring {
+            border-color: #fff;
+            animation: fillBorder linear forwards; 
+        }
+        @keyframes fillBorder {
+            from { clip-path: inset(0 100% 0 0); border-color: yellow; }
+            to { clip-path: inset(0 0 0 0); border-color: #0f0; }
+        }
+
+        /* 勝利動畫 */
+        .fullscreen-win {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 100;
+            background-color: rgba(0,0,0,1) !important;
+            border: none !important;
+            opacity: 1 !important;
+            transition: transform 0.5s ease !important;
+        }
+        .fullscreen-win svg {
+            width: 80% !important;
+            height: 80% !important;
+            animation: slowBounce 3s infinite ease-in-out !important;
+        }
+        @keyframes slowBounce {
+            0% { transform: scale(0.9) translateY(0); }
+            50% { transform: scale(1.1) translateY(-20px); }
+            100% { transform: scale(0.9) translateY(0); }
+        }
+
+        /* --- UI 按鈕群 --- */
+        #next-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 90px;
+            height: 90px;
+            background-color: #fff;
+            border-radius: 15px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 200;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+        }
+        #next-btn svg { width: 50px; height: 50px; fill: #000; }
+
+        /* 設定按鈕 */
+        #settings-trigger {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 800;
+        }
+        #settings-trigger svg { width: 30px; height: 30px; fill: #fff; }
+
+        /* --- 設定頁面 (Modal) --- */
+        #settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .settings-content {
+            width: 90%;
+            max-width: 700px;
+            background: #222;
+            padding: 20px;
+            border-radius: 20px;
+            border: 2px solid #555;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .setting-row { margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .setting-label { font-size: 20px; margin-bottom: 10px; display: block; color: #00FF00; }
+        
+        input[type=range] { width: 100%; height: 15px; background: #444; outline: none; border-radius: 10px; }
+        
+        .options-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .option-btn {
+            flex: 1;
+            padding: 12px;
+            background: #333;
+            border: 2px solid #555;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 10px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .option-btn.selected { background: #00FF00; color: #000; border-color: #00FF00; font-weight: bold; }
+
+        .color-check-group { display: flex; gap: 15px; flex-wrap: wrap; }
+        .color-checkbox {
+            display: flex; align-items: center; font-size: 18px; cursor: pointer;
+        }
+        .color-checkbox input { width: 20px; height: 20px; margin-right: 10px; }
+        .color-preview { width: 20px; height: 20px; border-radius: 50%; margin-left: 5px; border: 1px solid #fff; }
+
+        #stats-display { font-size: 18px; color: #fff; background: #333; padding: 10px; border-radius: 10px; text-align: center; }
+        #reset-stats-btn { background: #555; color: white; border: none; padding: 5px 10px; border-radius: 5px; margin-left: 10px; font-size: 14px; }
+
+        #close-settings-btn {
+            margin-top: 10px; padding: 15px 40px; background: white; color: black; font-size: 22px;
+            border: none; border-radius: 10px; width: 100%; font-weight: bold;
+        }
+
+        #status-hint {
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+            font-size: 14px; color: #888; pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay" onclick="startGameFlow()">
+        <button id="start-btn">開始遊戲</button>
+        <p style="color:#888; margin-top:20px;">點擊開始 (平板/眼動皆可)</p>
+    </div>
+
+    <div id="settings-modal">
+        <div class="settings-content">
+            <h2 style="text-align:center; margin-top:0;">設定</h2>
+            
+            <div class="setting-row">
+                <span class="setting-label">學習數據:</span>
+                <div id="stats-display">
+                    答對: <span id="stat-correct">0</span> / 總題數: <span id="stat-total">0</span> 
+                    (準確度: <span id="stat-accuracy">0%</span>)
+                    <button id="reset-stats-btn" onclick="resetStats()">重置</button>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">遊戲模式:</span>
+                <div class="options-group">
+                    <div class="option-btn selected" id="mode-dot" onclick="setGameMode('DOT')">點</div>
+                    <div class="option-btn" id="mode-line" onclick="setGameMode('LINE')">線</div>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">難度:</span>
+                <div class="options-group">
+                    <button class="option-btn diff-btn" id="diff-high" onclick="setDifficulty('high')">較高</button>
+                    <button class="option-btn diff-btn selected" id="diff-normal" onclick="setDifficulty('normal')">基礎</button>
+                    <button class="option-btn diff-btn" id="diff-low" onclick="setDifficulty('low')">較低</button>
+                    <button class="option-btn diff-btn" id="diff-errorless" onclick="setDifficulty('errorless')">無錯誤</button>
+                </div>
+                <p id="diff-desc" style="color:#aaa; font-size:14px; margin-top:10px;">
+                    基礎：顯示文字與圖示，3秒後出現選項。
+                </p>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">使用顏色:</span>
+                <div class="color-check-group" id="color-settings">
+                    </div>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">分段顯示 (左->右): <span id="seq-val-display">0</span> 秒</span>
+                <input type="range" id="seq-slider" min="0" max="5.0" step="0.5" value="0">
+                <p style="color:#aaa; font-size:12px; margin:5px 0 0 0;">
+                    0秒為關閉。開啟後：左邊淡入(停留N秒)->淡出->右邊淡入(停留N秒)->淡出->同時出現。
+                </p>
+            </div>
+
+            <div class="setting-row" style="border-bottom:none;">
+                <span class="setting-label">注視時間 (選取): <span id="gaze-val-display">0.8</span> 秒</span>
+                <input type="range" id="gaze-slider" min="0.3" max="2.0" step="0.1" value="0.8">
+            </div>
+
+            <button id="close-settings-btn" onclick="closeSettings()">確定 / 回到遊戲</button>
+        </div>
+    </div>
+
+    <div id="header">
+        <span id="question-text">哪個是點？</span>
+        <div id="header-display" class="sample-display"></div>
+        <div id="settings-trigger" onclick="openSettings()">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.04.17 0 .4.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.04-.22 0-.45-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </div>
+    </div>
+
+    <div id="game-area">
+        <div id="left-option" class="option-container"><div class="progress-ring"></div></div>
+        <div id="right-option" class="option-container"><div class="progress-ring"></div></div>
+        <div id="center-prompt"></div>
+        <div id="status-hint">準備中...</div>
+    </div>
+
+    <div id="next-btn" onclick="manualNext()">
+        <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h12z"/></svg>
+    </div>
+
+    <script>
+        // --- 參數設定 ---
+        let EYE_DURATION_MS = 800; 
+        const TOUCH_DURATION_MS = 100;
+        let DIFFICULTY = 'normal'; 
+        let GAME_MODE = 'DOT'; 
+        let DELAY_SHOW_MS = 3000; 
+        let SEQ_SHOW_MS = 0; // 分段顯示時間
+
+        const PROMPT_SHOW_MS = 4000;
+        const AUTO_NEXT_MS = 5000;
+
+        const ALL_COLORS = [
+            {code: '#FF0000', name: '紅'},
+            {code: '#FFFF00', name: '黃'},
+            {code: '#00FFFF', name: '藍(青)'},
+            {code: '#00FF00', name: '綠'},
+            {code: '#FF00FF', name: '紫'}
+        ];
+        let activeColors = [...ALL_COLORS.map(c => c.code)]; 
+
+        let currentTargetColor = '';
+        let currentLineParams = null;
+        let timer = null;
+        let autoNextTimer = null;
+        // 分段顯示用的多個計時器
+        let seqTimer1=null, seqTimer2=null, seqTimer3=null, seqTimer4=null;
+        
+        let isSolved = false;
+        let isInputReady = false; 
+        
+        let statTotal = 0;
+        let statCorrect = 0;
+
+        let currentUtterance = null;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            initColorSettings();
+            updateStatsUI();
+        });
+
+        function initColorSettings() {
+            const container = document.getElementById('color-settings');
+            container.innerHTML = '';
+            ALL_COLORS.forEach(color => {
+                const label = document.createElement('label');
+                label.className = 'color-checkbox';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = color.code;
+                checkbox.checked = true; 
+                checkbox.onchange = updateActiveColors;
+                
+                const preview = document.createElement('div');
+                preview.className = 'color-preview';
+                preview.style.backgroundColor = color.code;
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(color.name));
+                label.appendChild(preview);
+                container.appendChild(label);
+            });
+        }
+
+        function updateActiveColors() {
+            const checkboxes = document.querySelectorAll('#color-settings input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selected.push(cb.value);
+            });
+            if (selected.length === 0) {
+                alert("最少需要選擇一種顏色！");
+                checkboxes[0].checked = true;
+                selected.push(checkboxes[0].value);
+            }
+            activeColors = selected;
+        }
+
+        const gazeSlider = document.getElementById('gaze-slider');
+        const gazeDisplay = document.getElementById('gaze-val-display');
+        gazeSlider.oninput = function() {
+            gazeDisplay.innerText = this.value;
+            EYE_DURATION_MS = this.value * 1000;
+        }
+
+        const seqSlider = document.getElementById('seq-slider');
+        const seqDisplay = document.getElementById('seq-val-display');
+        seqSlider.oninput = function() {
+            seqDisplay.innerText = this.value;
+            SEQ_SHOW_MS = this.value * 1000;
+        }
+
+        function openSettings() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            updateStatsUI();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            initGame();
+        }
+
+        function setGameMode(mode) {
+            GAME_MODE = mode;
+            document.getElementById('mode-dot').classList.remove('selected');
+            document.getElementById('mode-line').classList.remove('selected');
+            if(mode === 'DOT') document.getElementById('mode-dot').classList.add('selected');
+            else document.getElementById('mode-line').classList.add('selected');
+        }
+
+        function setDifficulty(mode) {
+            DIFFICULTY = mode;
+            document.querySelectorAll('.diff-btn').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById('diff-' + mode).classList.add('selected');
+
+            const desc = document.getElementById('diff-desc');
+            if(mode === 'high') desc.innerText = "較高：隱藏頂部圖示，只讀出問題，依賴聽覺記憶。";
+            if(mode === 'normal') desc.innerText = "基礎：顯示文字與圖示，3秒後出現選項。";
+            if(mode === 'low') desc.innerText = "較低：先在中央顯示大圖並讀題，4秒後顯示選項。";
+            if(mode === 'errorless') desc.innerText = "無錯誤：只顯示正確答案，另一邊隱藏。";
+        }
+
+        function updateStatsUI() {
+            document.getElementById('stat-total').innerText = statTotal;
+            document.getElementById('stat-correct').innerText = statCorrect;
+            const acc = statTotal === 0 ? 0 : Math.round((statCorrect / statTotal) * 100);
+            document.getElementById('stat-accuracy').innerText = acc + "%";
+        }
+
+        function resetStats() {
+            statTotal = 0;
+            statCorrect = 0;
+            updateStatsUI();
+        }
+
+        // --- 遊戲流程 ---
+
+        function startGameFlow() {
+            document.getElementById('start-overlay').style.display = 'none';
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+            initGame();
+        }
+
+        function speakQuestion() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                let text = "邊個係點？";
+                if (GAME_MODE === 'LINE') text = "邊個係線？";
+                
+                currentUtterance = new SpeechSynthesisUtterance(text);
+                currentUtterance.lang = 'zh-HK';
+                currentUtterance.rate = 0.8;
+                currentUtterance.pitch = 1.1;
+                window.speechSynthesis.speak(currentUtterance);
+            }
+        }
+
+        function speakSuccess() {
+             if ('speechSynthesis' in window) {
+                let text = "啱啦，呢個係點。";
+                if (GAME_MODE === 'LINE') text = "啱啦，呢個係線。";
+                
+                currentUtterance = new SpeechSynthesisUtterance(text);
+                currentUtterance.lang = 'zh-HK';
+                currentUtterance.rate = 0.9;
+                currentUtterance.pitch = 1.2;
+                window.speechSynthesis.speak(currentUtterance);
+            }
+        }
+
+        function playExtendedSuccessSound() {
+            const now = audioCtx.currentTime;
+            const root = 523.25; 
+            const sequence = [
+                {t:0.0,f:root},{t:0.2,f:root*1.25},{t:0.4,f:root*1.5},{t:0.6,f:root*2},
+                {t:0.8,f:root*2.5},{t:1.0,f:root*3},{t:1.4,f:root*3},{t:1.6,f:root*2.5},
+                {t:1.8,f:root*2},{t:2.0,f:root*1.5},{t:2.4,f:root*2},{t:2.5,f:root*2.5},{t:2.6,f:root*2}
+            ];
+            sequence.forEach(note => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.value = note.f;
+                gain.gain.setValueAtTime(0.01, now+note.t);
+                gain.gain.linearRampToValueAtTime(0.2, now+note.t+0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, now+note.t+0.4);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now+note.t); osc.stop(now+note.t+0.5);
+            });
+            setTimeout(() => {
+                [root, root*1.25, root*1.5, root*2].forEach(freq => {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.value = freq;
+                    const st = now + 3.0;
+                    gain.gain.setValueAtTime(0, st);
+                    gain.gain.linearRampToValueAtTime(0.1, st+0.5);
+                    gain.gain.linearRampToValueAtTime(0, st+2.5);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(st); osc.stop(st+2.5);
+                });
+            }, 0);
+        }
+
+        // --- 初始化遊戲 ---
+        function initGame() {
+            if (autoNextTimer) clearTimeout(autoNextTimer);
+            if (seqTimer1) clearTimeout(seqTimer1);
+            if (seqTimer2) clearTimeout(seqTimer2);
+            if (seqTimer3) clearTimeout(seqTimer3);
+            if (seqTimer4) clearTimeout(seqTimer4);
+            
+            window.speechSynthesis.cancel();
+            isSolved = false;
+            isInputReady = false; 
+            
+            const hint = document.getElementById('status-hint');
+            hint.innerText = "請稍候...";
+
+            document.getElementById('question-text').innerText = (GAME_MODE === 'DOT') ? "哪個是點？" : "哪個是線？";
+            document.getElementById('next-btn').style.display = 'none';
+            document.getElementById('center-prompt').style.display = 'none';
+            
+            const leftOpt = document.getElementById('left-option');
+            const rightOpt = document.getElementById('right-option');
+            const headerDisplay = document.getElementById('header-display');
+            headerDisplay.innerHTML = ''; 
+
+            // 強制重置狀態
+            [leftOpt, rightOpt].forEach(el => {
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.className = 'option-container';
+                el.classList.remove('fullscreen-win');
+                el.style.display = 'flex';
+                el.style.pointerEvents = 'auto'; 
+                el.style.visibility = 'visible'; 
+                void el.offsetWidth; 
+            });
+
+            currentTargetColor = activeColors[Math.floor(Math.random() * activeColors.length)];
+
+            let targetSVG;
+            if (GAME_MODE === 'DOT') {
+                targetSVG = createShapeSVG('dot', currentTargetColor);
+            } else {
+                currentLineParams = generateLineParams();
+                targetSVG = createLineFromParams(currentLineParams, currentTargetColor);
+            }
+
+            if (DIFFICULTY !== 'high') {
+                headerDisplay.appendChild(targetSVG.cloneNode(true));
+                headerDisplay.style.opacity = '1';
+            } else {
+                headerDisplay.style.opacity = '0';
+            }
+
+            speakQuestion();
+
+            // 生成選項
+            const correctSide = Math.random() < 0.5 ? 0 : 1;
+            leftOpt.innerHTML = '<div class="progress-ring"></div>';
+            rightOpt.innerHTML = '<div class="progress-ring"></div>';
+
+            let correctSVG, distractorSVG;
+
+            if (GAME_MODE === 'DOT') {
+                correctSVG = createShapeSVG('dot', currentTargetColor);
+                distractorSVG = createLineFromParams(generateLineParams(), getRandomColor());
+            } else {
+                correctSVG = createLineFromParams(currentLineParams, currentTargetColor);
+                const distractorTypes = ['dot', 'square', 'triangle'];
+                const distType = distractorTypes[Math.floor(Math.random() * distractorTypes.length)];
+                distractorSVG = createShapeSVG(distType, getRandomColor());
+            }
+
+            // 分配與 Errorless 標記
+            if (correctSide === 0) {
+                leftOpt.appendChild(correctSVG); leftOpt.dataset.correct = "true";
+                rightOpt.appendChild(distractorSVG); rightOpt.dataset.correct = "false";
+                // 重置標記
+                delete leftOpt.dataset.hide; 
+                if (DIFFICULTY === 'errorless') rightOpt.dataset.hide = "true";
+                else delete rightOpt.dataset.hide;
+            } else {
+                rightOpt.appendChild(correctSVG); rightOpt.dataset.correct = "true";
+                leftOpt.appendChild(distractorSVG); leftOpt.dataset.correct = "false";
+                // 重置標記
+                delete rightOpt.dataset.hide;
+                if (DIFFICULTY === 'errorless') leftOpt.dataset.hide = "true";
+                else delete leftOpt.dataset.hide;
+            }
+
+            // 流程控制
+            if (DIFFICULTY === 'low' || DIFFICULTY === 'errorless') {
+                // 低難度：中央提示 -> 判斷是否需要分段顯示
+                const centerPrompt = document.getElementById('center-prompt');
+                centerPrompt.innerHTML = '';
+                const promptSVG = (GAME_MODE === 'DOT') ? createShapeSVG('dot', currentTargetColor) : createLineFromParams(currentLineParams, currentTargetColor);
+                centerPrompt.appendChild(promptSVG);
+                centerPrompt.style.display = 'block';
+                hint.innerText = "看看這裡...";
+                
+                setTimeout(() => {
+                    if(isSolved) return; 
+                    centerPrompt.style.display = 'none';
+                    if (SEQ_SHOW_MS > 0) runSequentialDisplay();
+                    else showBothOptions(); 
+                }, PROMPT_SHOW_MS);
+
+            } else {
+                // 基礎/較高：等待 -> 判斷是否需要分段顯示
+                hint.innerText = "聽聽看題目...";
+                setTimeout(() => {
+                    if(isSolved) return;
+                    if (SEQ_SHOW_MS > 0) runSequentialDisplay();
+                    else showBothOptions();
+                }, DELAY_SHOW_MS);
+            }
+
+            bindEvents(leftOpt);
+            bindEvents(rightOpt);
+        }
+
+        // --- 分段顯示邏輯 (修正為淡入淡出) ---
+        function runSequentialDisplay() {
+            const left = document.getElementById('left-option');
+            const right = document.getElementById('right-option');
+            const hint = document.getElementById('status-hint');
+
+            isInputReady = false; 
+            
+            // 確保啟用 Transition
+            left.style.transition = 'opacity 0.5s ease';
+            right.style.transition = 'opacity 0.5s ease';
+
+            // 階段 1: 顯示左邊 (右邊隱藏)
+            hint.innerText = "看左邊...";
+            if (!left.dataset.hide) left.style.opacity = '1';
+            right.style.opacity = '0'; // 確保右邊看不見
+
+            // Timer 1: 左邊顯示結束 -> 淡出左邊
+            seqTimer1 = setTimeout(() => {
+                if(isSolved) return;
+                
+                left.style.opacity = '0'; // 左邊淡出
+
+                // Timer 2: 等待淡出動畫(0.5s) -> 顯示右邊
+                seqTimer2 = setTimeout(() => {
+                    if(isSolved) return;
+
+                    // 階段 2: 顯示右邊
+                    hint.innerText = "看右邊...";
+                    if (!right.dataset.hide) right.style.opacity = '1';
+
+                    // Timer 3: 右邊顯示結束 -> 淡出右邊
+                    seqTimer3 = setTimeout(() => {
+                        if(isSolved) return;
+
+                        right.style.opacity = '0'; // 右邊淡出
+
+                        // Timer 4: 等待淡出動畫(0.5s) -> 雙邊淡入
+                        seqTimer4 = setTimeout(() => {
+                            if(isSolved) return;
+                            showBothOptions(); // 這個函式會將 Opacity 設為 1，觸發淡入
+                        }, 500);
+
+                    }, SEQ_SHOW_MS);
+
+                }, 500); // 這裡的 500ms 對應 CSS transition 時間
+
+            }, SEQ_SHOW_MS);
+        }
+
+        // --- 顯示選項 (最終狀態) ---
+        function showBothOptions() {
+            const leftOpt = document.getElementById('left-option');
+            const rightOpt = document.getElementById('right-option');
+            const hint = document.getElementById('status-hint');
+
+            leftOpt.style.transition = 'opacity 0.5s ease-in';
+            rightOpt.style.transition = 'opacity 0.5s ease-in';
+
+            if (DIFFICULTY === 'errorless') {
+                // Errorless: hide 屬性為 true 的設為 visibility: hidden
+                if(!leftOpt.dataset.hide) leftOpt.style.opacity = '1';
+                else leftOpt.style.visibility = 'hidden';
+
+                if(!rightOpt.dataset.hide) rightOpt.style.opacity = '1';
+                else rightOpt.style.visibility = 'hidden';
+            } else {
+                leftOpt.style.opacity = '1';
+                rightOpt.style.opacity = '1';
+            }
+            
+            isInputReady = true; 
+            hint.innerText = (GAME_MODE === 'DOT') ? "請選擇同樣的點點" : "請選擇同樣的線";
+        }
+
+        // --- 輔助函式 ---
+        function getRandomColor() {
+            if (activeColors.length === 1) return activeColors[0];
+            let color;
+            do {
+                color = activeColors[Math.floor(Math.random() * activeColors.length)];
+            } while (color === currentTargetColor);
+            return color;
+        }
+
+        function generateLineParams() {
+            const types = ['straight', 'curve'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const variation = Math.floor(Math.random() * 4); 
+            return { type, variation };
+        }
+
+        function createLineFromParams(params, color) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", "0 0 100 100");
+            svg.setAttribute("class", "shape-svg");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            let d = "";
+            if (params.type === 'straight') {
+                if (params.variation === 0) d = "M10,50 L90,50"; 
+                else if (params.variation === 1) d = "M50,10 L50,90"; 
+                else if (params.variation === 2) d = "M15,85 L85,15"; 
+                else d = "M15,15 L85,85"; 
+            } else {
+                if (params.variation === 0) d = "M10,60 Q50,0 90,60"; 
+                else if (params.variation === 1) d = "M10,40 Q50,100 90,40"; 
+                else if (params.variation === 2) d = "M20,20 Q100,50 20,80"; 
+                else d = "M80,20 Q0,50 80,80"; 
+            }
+            path.setAttribute("d", d); path.setAttribute("stroke", color); path.setAttribute("stroke-width", "12"); 
+            path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round");
+            svg.appendChild(path); return svg;
+        }
+
+        function createShapeSVG(type, color) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", "0 0 100 100");
+            svg.setAttribute("class", "shape-svg");
+            let shape;
+            if (type === 'dot') {
+                shape = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                shape.setAttribute("cx", "50"); shape.setAttribute("cy", "50"); shape.setAttribute("r", "35");
+            } else if (type === 'square') {
+                shape = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                shape.setAttribute("x", "20"); shape.setAttribute("y", "20"); shape.setAttribute("width", "60"); shape.setAttribute("height", "60"); shape.setAttribute("rx", "10"); 
+            } else if (type === 'triangle') {
+                shape = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                shape.setAttribute("points", "50,15 85,80 15,80");
+                shape.setAttribute("stroke-linejoin", "round"); shape.setAttribute("stroke-width", "8"); shape.setAttribute("stroke", color); 
+            }
+            shape.setAttribute("fill", color); svg.appendChild(shape); return svg;
+        }
+
+        // --- 互動與計時 ---
+        function bindEvents(element) {
+            element.onmouseenter = () => startTimer(element, false);
+            element.onmouseleave = () => stopTimer(element);
+            element.ontouchstart = (e) => { e.preventDefault(); startTimer(element, true); };
+            element.ontouchend = (e) => { e.preventDefault(); stopTimer(element); };
+        }
+
+        function startTimer(element, isTouch) {
+            if (isSolved || !isInputReady) return;
+            const duration = isTouch ? TOUCH_DURATION_MS : EYE_DURATION_MS;
+            const ring = element.querySelector('.progress-ring');
+            if(ring) {
+                ring.classList.add('active-ring');
+                ring.style.animationDuration = `${duration}ms`;
+            }
+            timer = setTimeout(() => { checkAnswer(element); }, duration);
+        }
+
+        function stopTimer(element) {
+            if (isSolved) return;
+            if (timer) { clearTimeout(timer); timer = null; }
+            const ring = element.querySelector('.progress-ring');
+            if(ring) {
+                ring.classList.remove('active-ring');
+                void ring.offsetWidth; 
+            }
+        }
+
+        function checkAnswer(element) {
+            if (isSolved || !isInputReady) return;
+            statTotal++;
+            if (element.dataset.correct === "true") {
+                isSolved = true;
+                statCorrect++;
+                playExtendedSuccessSound();
+                speakSuccess();
+                element.classList.add('fullscreen-win');
+                document.getElementById('status-hint').innerText = "太棒了！";
+                
+                const otherId = element.id === 'left-option' ? 'right-option' : 'left-option';
+                const otherEl = document.getElementById(otherId);
+                otherEl.style.transition = 'opacity 0.5s';
+                otherEl.style.opacity = '0';
+                
+                document.getElementById('next-btn').style.display = 'flex';
+                autoNextTimer = setTimeout(() => { initGame(); }, AUTO_NEXT_MS);
+            } else {
+                stopTimer(element);
+                element.style.opacity = '0.3';
+                setTimeout(() => { element.style.opacity = '1'; }, 300);
+            }
+            updateStatsUI(); 
+        }
+
+        function manualNext() {
+            if (autoNextTimer) clearTimeout(autoNextTimer);
+            initGame();
+        }
+    </script>
+</body>
+</html>
